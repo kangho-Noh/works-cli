@@ -141,11 +141,15 @@ works-cli mail send --to a@x.com --subject hi --payload @/tmp/mail.json  # raw J
 ```bash
 works-cli cal list                                    # 내 캘린더 목록
 works-cli cal events --from 2026-05-22 --to 2026-05-23
+works-cli cal events --from 2026-05-22 --to 2026-05-22 --expand   # 오늘 인스턴스만 (반복 일정 펴기)
 works-cli cal events --calendar <calId> --from 2026-05-22 --to 2026-05-23
 works-cli cal show <eventId>
 works-cli cal create --summary "회의" --start 2026-05-23T10:00:00 --end 2026-05-23T11:00:00
 works-cli cal create --summary "회의" --start ... --end ... --attendees a@x.com,b@x.com
 ```
+
+> [!IMPORTANT]
+> NAVER WORKS Calendar API는 **반복 일정을 펴서 주지 않습니다**. 응답의 `start.dateTime`은 일정 원본 시각이라, "오늘/이번 주 일정"을 구하려면 `--expand`가 필요합니다. `--expand`는 RRULE/EXDATE/UNTIL/COUNT를 평가해 `{instances: [...], totalCount: N}` 형식으로 펴서 반환합니다.
 
 ### Bot
 

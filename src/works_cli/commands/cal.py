@@ -9,10 +9,11 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 import click
+from dateutil.rrule import rrulestr
 
 from .._cli_utils import get_client, handle_errors
 from ..output import emit, resolve_output
@@ -47,6 +48,82 @@ def _normalize_datetime(value: str, default_time: str, tz: str) -> str:
     return f"{value}T{default_time}{_tz_offset(tz)}"
 
 
+def _parse_component_dt(slot: dict, fallback_tz: str) -> datetime:
+    """{'dateTime': '...', 'timeZone': '...'}에서 tz-aware datetime."""
+    raw = slot.get("dateTime", "")
+    dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo(slot.get("timeZone") or fallback_tz))
+    return dt
+
+
+def _component_instance(ec: dict, *, recurring: bool, start_dt: datetime, end_dt: datetime) -> dict:
+    """eventComponent → 평면화된 instance dict."""
+    return {
+        "eventId": ec.get("eventId"),
+        "summary": ec.get("summary"),
+        "description": ec.get("description"),
+        "location": ec.get("location"),
+        "organizer": ec.get("organizer"),
+        "attendees": ec.get("attendees", []),
+        "start": {
+            "dateTime": start_dt.isoformat(),
+            "timeZone": ec.get("start", {}).get("timeZone"),
+        },
+        "end": {
+            "dateTime": end_dt.isoformat(),
+            "timeZone": ec.get("end", {}).get("timeZone"),
+        },
+        "transparency": ec.get("transparency"),
+        "isRecurringInstance": recurring,
+    }
+
+
+def _expand_events(data: dict, from_dt: datetime, to_dt: datetime) -> dict:
+    """API 응답의 반복 일정을 RRULE로 펴서 instance 평면 리스트로 변환."""
+    instances: list[dict] = []
+    for evt in data.get("events", []):
+        components = evt.get("eventComponents", [])
+        master = next((ec for ec in components if ec.get("recurrence")), None)
+        exceptions = [ec for ec in components if not ec.get("recurrence")]
+
+        if master:
+            tz_name = master.get("start", {}).get("timeZone") or _DEFAULT_TZ
+            ms = _parse_component_dt(master["start"], tz_name)
+            me = _parse_component_dt(master["end"], tz_name)
+            duration = me - ms
+            rule_text = "\n".join(master.get("recurrence", []))
+            try:
+                rule = rrulestr(rule_text, dtstart=ms, forceset=True)
+                # between은 naive dtstart를 요구할 수 있어 aware/naive 일관 유지
+                for occ in rule.between(from_dt, to_dt, inc=True):
+                    instances.append(
+                        _component_instance(
+                            master, recurring=True, start_dt=occ, end_dt=occ + duration
+                        )
+                    )
+            except (ValueError, TypeError):
+                if from_dt <= ms <= to_dt:
+                    instances.append(
+                        _component_instance(master, recurring=True, start_dt=ms, end_dt=me)
+                    )
+
+        for ec in exceptions:
+            tz_name = ec.get("start", {}).get("timeZone") or _DEFAULT_TZ
+            try:
+                es = _parse_component_dt(ec["start"], tz_name)
+                ee = _parse_component_dt(ec["end"], tz_name)
+            except (KeyError, ValueError):
+                continue
+            if from_dt <= es <= to_dt:
+                instances.append(
+                    _component_instance(ec, recurring=False, start_dt=es, end_dt=ee)
+                )
+
+    instances.sort(key=lambda x: x["start"]["dateTime"])
+    return {"instances": instances, "totalCount": len(instances)}
+
+
 @click.group()
 def cal() -> None:
     """캘린더 명령."""
@@ -69,6 +146,11 @@ def cal_list(ctx: click.Context, as_json: bool) -> None:
 @click.option("--to", "to_date", required=True, help="조회 종료일 (YYYY-MM-DD 또는 ISO 8601)")
 @click.option("--calendar", "calendar_id", help="캘린더 ID (생략 시 기본 캘린더)")
 @click.option("--timezone", "tz", default=_DEFAULT_TZ, help="타임존 (기본: Asia/Seoul)")
+@click.option(
+    "--expand",
+    is_flag=True,
+    help="반복 일정의 RRULE을 평가해 인스턴스 시각으로 펴서 반환 (응답 형식: {instances, totalCount})",
+)
 @click.option("--json", "as_json", is_flag=True, help="JSON 출력")
 @click.pass_context
 @handle_errors
@@ -78,20 +160,28 @@ def cal_events(
     to_date: str,
     calendar_id: Optional[str],
     tz: str,
+    expand: bool,
     as_json: bool,
 ) -> None:
-    """캘린더 일정 목록 조회."""
+    """캘린더 일정 목록 조회.
+
+    NAVER WORKS API는 반복 일정을 펴서 주지 않고 마스터 + EXDATE 형태로 응답한다.
+    오늘/이번 주의 실제 인스턴스 시각이 필요하면 --expand를 쓴다.
+    """
     out = resolve_output(ctx.obj, as_json)
-    params = {
-        "fromDateTime": _normalize_datetime(from_date, "00:00:00", tz),
-        "untilDateTime": _normalize_datetime(to_date, "23:59:59", tz),
-    }
+    from_str = _normalize_datetime(from_date, "00:00:00", tz)
+    to_str = _normalize_datetime(to_date, "23:59:59", tz)
+    params = {"fromDateTime": from_str, "untilDateTime": to_str}
     with get_client() as c:
         if calendar_id:
             path = f"/users/{c.user_id}/calendars/{calendar_id}/events"
         else:
             path = f"/users/{c.user_id}/calendar/events"
         data = c.get(path, params=params)
+    if expand:
+        from_dt = datetime.fromisoformat(from_str)
+        to_dt = datetime.fromisoformat(to_str)
+        data = _expand_events(data, from_dt, to_dt)
     emit(data, out)
 
 
