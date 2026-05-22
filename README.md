@@ -161,6 +161,42 @@ works-cli bot send-channel --bot <botId> --channel <chId> --message "공지"
 works-cli bot send --bot <botId> --user u@x.com --payload @/tmp/sticker.json
 ```
 
+### Task (할일)
+
+```bash
+works-cli task categories                                     # 개인 카테고리 목록 (list 전에 필수)
+works-cli task list --category <categoryId>                   # 카테고리의 할일 (기본 status=TODO)
+works-cli task list --category <categoryId> --status ALL      # 완료 포함 전체
+works-cli task show <taskId>
+works-cli task create --title "백업 점검" --due 2026-05-30T18:00:00+09:00
+works-cli task complete <taskId>
+works-cli task incomplete <taskId>
+works-cli task delete <taskId>
+```
+
+> [!NOTE]
+> `task list`는 `--category`가 필수입니다. 보통 첫 카테고리가 "미분류 할 일"이고 `categoryId`는 `"default"` 같은 짧은 값입니다. `task categories --json | jq '.taskCategories[0].categoryId'`로 추출하세요.
+
+### Note (조직/그룹 노트)
+
+```bash
+works-cli note list --group <groupId>                         # 그룹 노트 게시글 목록
+works-cli note show <postId> --group <groupId>
+works-cli note create --group <groupId> --title T --body B
+works-cli note delete <postId> --group <groupId>
+```
+
+### User (Directory)
+
+```bash
+works-cli user search                                         # 구성원 목록
+works-cli user search --query 홍길동                           # 이름/이메일로 검색
+works-cli user show user@yourdomain.com                       # 본인/타인 정보
+works-cli user orgs                                           # 조직 목록
+works-cli user org-show <orgUnitId>                           # 조직 상세
+works-cli user org-members <orgUnitId>                        # 조직 구성원
+```
+
 ### 글로벌 옵션
 
 | 옵션 | 설명 |

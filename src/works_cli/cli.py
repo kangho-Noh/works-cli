@@ -54,10 +54,16 @@ def config_show() -> None:
 from .commands.bot import bot as _bot_group  # noqa: E402
 from .commands.cal import cal as _cal_group  # noqa: E402
 from .commands.mail import mail as _mail_group  # noqa: E402
+from .commands.note import note as _note_group  # noqa: E402
+from .commands.task import task as _task_group  # noqa: E402
+from .commands.user import user as _user_group  # noqa: E402
 
 cli.add_command(_mail_group)
 cli.add_command(_cal_group)
 cli.add_command(_bot_group)
+cli.add_command(_task_group)
+cli.add_command(_note_group)
+cli.add_command(_user_group)
 
 
 def main() -> None:
