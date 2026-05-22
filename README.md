@@ -1,0 +1,299 @@
+# works-cli
+
+> PAT(Personal Access Token) 기반 NAVER WORKS API CLI — 메일, 캘린더, Bot 메시지를 사내망에서 호출합니다.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
+
+`works-cli`는 NAVER WORKS API(`https://corp.worksapis.com/v1.0`)를 CLI로 다루기 위한 도구입니다. 사내 `nworks`(MCP/SSO 기반, 주 1회 재로그인 필요)의 **PAT 기반 후속 도구**로, 장기 유효한 토큰으로 스크립트/자동화에 적합합니다.
+
+> [!IMPORTANT]
+> 사내망 전용입니다. VPN/사내망 외부에서는 동작하지 않습니다.
+
+---
+
+## TL;DR
+
+```bash
+git clone https://github.com/your-org/works-cli.git
+cd works-cli
+pipx install .
+works-cli config set-pat            # PAT, userId 대화형 입력
+works-cli mail unread               # 동작 확인
+```
+
+---
+
+## 요구사항
+
+- **Python 3.11+**
+- **pipx** (권장) 또는 일반 pip
+- **사내망 접근** (VPN 등)
+- **NAVER WORKS PAT** (필요 scope는 [아래 표](#pat-발급--scope-가이드) 참고)
+
+---
+
+## 설치
+
+### pipx (권장)
+
+```bash
+git clone https://github.com/your-org/works-cli.git
+cd works-cli
+pipx install .
+works-cli --version
+```
+
+### pip + venv
+
+```bash
+git clone https://github.com/your-org/works-cli.git
+cd works-cli
+python3 -m venv .venv && source .venv/bin/activate
+pip install .
+```
+
+### 개발자용 (editable + dev deps)
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+---
+
+## PAT 발급 & scope 가이드
+
+NAVER WORKS PAT는 사내 PAT 발급 페이지에서 발급할 수 있습니다(자세한 발급 절차는 사내 문서를 참고).
+
+**필요 scope (명령별):**
+
+| 명령 | 최소 scope |
+|------|-----------|
+| `mail unread/folders/list/read` | `mail.read` |
+| `mail send` | `mail.send` (또는 `mail`) |
+| `cal list/events/show` | `calendar.read` |
+| `cal create` | `calendar.write` (또는 `calendar`) |
+| `bot list/info` | `bot.read` (또는 `bot`) |
+| `bot send / send-channel` | `bot.message` |
+
+> [!WARNING]
+> PAT는 비밀번호와 동등한 권한을 가집니다. 코드/커밋/이슈/Slack에 절대 평문으로 붙여넣지 마세요. 노출되면 즉시 사내 페이지에서 만료(rotate)하세요.
+
+---
+
+## 초기 설정
+
+세 가지 방법 중 하나를 선택합니다. **우선순위는 환경변수 > 설정파일** 입니다.
+
+### 방법 A — 대화형 설정 (가장 간단)
+
+```bash
+works-cli config set-pat
+# WORKS_PAT: ****     <- hide_input, 입력값은 화면에 표시 안 됨
+# WORKS_USER_ID (이메일 형식): user@yourdomain.com
+# WORKS_BASE_URL [https://corp.worksapis.com/v1.0]: (Enter)
+```
+
+저장 위치: `~/.works-cli/config.json` (퍼미션 0600)
+
+### 방법 B — 환경변수
+
+```bash
+export WORKS_PAT="..."
+export WORKS_USER_ID="user@yourdomain.com"
+# (선택) export WORKS_BASE_URL="https://corp.worksapis.com/v1.0"
+```
+
+### 방법 C — `.env` 파일
+
+`.env.example`를 `.env`로 복사한 뒤 값을 채워 넣고, 셸에서 `source .env && export $(cut -d= -f1 .env)` 등으로 로드합니다. **`.env`는 `.gitignore`에 등록되어 있어 커밋되지 않습니다.**
+
+### 설정 확인
+
+```bash
+works-cli config show
+# PAT:      ****abcd   (마지막 4자만 표시)
+# USER_ID:  user@yourdomain.com
+# BASE_URL: https://corp.worksapis.com/v1.0
+```
+
+---
+
+## 명령 카탈로그
+
+### Mail
+
+```bash
+works-cli mail unread                                 # 안 읽은 메일 수
+works-cli mail folders                                # 메일함 목록
+works-cli mail list --folder INBOX --limit 10         # 메일 목록
+works-cli mail read <mailId>                          # 메일 상세
+works-cli mail send --to a@x.com --subject hi --body world
+works-cli mail send --to a@x.com --subject hi --html --body '<b>hi</b>'
+works-cli mail send --to a@x.com --subject hi --payload @/tmp/mail.json  # raw JSON
+```
+
+### Calendar
+
+```bash
+works-cli cal list                                    # 내 캘린더 목록
+works-cli cal events --from 2026-05-22 --to 2026-05-23
+works-cli cal events --calendar <calId> --from 2026-05-22 --to 2026-05-23
+works-cli cal show <eventId>
+works-cli cal create --summary "회의" --start 2026-05-23T10:00:00 --end 2026-05-23T11:00:00
+works-cli cal create --summary "회의" --start ... --end ... --attendees a@x.com,b@x.com
+```
+
+### Bot
+
+```bash
+works-cli bot list                                            # Bot 목록
+works-cli bot info <botId>                                    # Bot 상세
+works-cli bot send --bot <botId> --user user@yourdomain.com --message "안녕"
+works-cli bot send-channel --bot <botId> --channel <chId> --message "공지"
+works-cli bot send --bot <botId> --user u@x.com --payload @/tmp/sticker.json
+```
+
+### 글로벌 옵션
+
+| 옵션 | 설명 |
+|------|------|
+| `-o, --output {text,json}` | 출력 포맷 |
+| `--json` | `-o json` 단축 |
+| `-h, --help` | 도움말 |
+| `--version` | 버전 |
+
+명령별 `--json`도 동일하게 동작합니다.
+
+---
+
+## AI 에이전트용 빠른 가이드
+
+다른 사람이 이 레포 링크를 자신의 AI 에이전트에게 "설치하고 사용 가능하게 해줘"라고 요청하는 시나리오를 가정한 가이드입니다.
+
+### 자동 설치 절차
+
+```bash
+# 1) clone & install
+git clone https://github.com/your-org/works-cli.git ~/works-cli
+cd ~/works-cli && pipx install .
+
+# 2) PAT 입력 (대화형)
+works-cli config set-pat
+
+# 3) 동작 확인
+works-cli --help
+works-cli config show
+works-cli mail unread
+```
+
+### Skill 등록 (Claude Code / 호환 에이전트)
+
+이 레포에는 `skills/works-cli/SKILL.md`이 동봉되어 있습니다. AI 에이전트의 skill 디렉토리에 복사하면 자연어 요청("안 읽은 메일 몇 개야?")에 자동으로 `works-cli`를 활용합니다.
+
+```bash
+# Claude Code
+cp -r skills/works-cli ~/.claude/skills/
+
+# 다른 에이전트 — 해당 에이전트의 skill 디렉토리로 복사
+```
+
+### AI 에이전트가 따라야 할 원칙
+
+- PAT를 사용자로부터 받았더라도 **평문으로 echo하거나 다른 명령 출력/로그에 포함시키지 않습니다**
+- write 명령(`mail send`, `cal create`, `bot send/send-channel`)은 회수 어려운 사이드 이펙트가 있으므로 **실행 전 사용자에게 한 번 더 확인합니다**
+- API 페이로드 스키마가 사내 문서와 다르면 `--payload @file.json`으로 raw JSON을 전달합니다
+
+---
+
+## 보안 주의
+
+- **PAT는 비밀번호와 동등**합니다. 절대 코드/커밋/이슈/Slack/스크린샷에 평문으로 포함하지 마세요.
+- 노출되면 즉시 사내 PAT 페이지에서 만료(rotate)하고 새로 발급하세요.
+- 이 레포는 secret scanning(`gitleaks` + `pre-commit`)이 구성되어 있습니다. 첫 커밋 전에 반드시:
+  ```bash
+  pre-commit install
+  pre-commit run --all-files
+  ```
+- 이슈/PR 본문에 토큰 형태 문자열이 포함되지 않도록 GitHub의 secret scanning 알림도 활성화하세요.
+
+---
+
+## `nworks` → `works-cli` 마이그레이션
+
+| nworks | works-cli | 비고 |
+|--------|-----------|------|
+| `nworks auth login/logout` | (불필요) | PAT는 장기 유효 |
+| `nworks mail list --unread` | `works-cli mail list --folder INBOX --json | jq '...'` | 또는 `mail unread`로 카운트만 |
+| `nworks mail folders` | `works-cli mail folders` | |
+| `nworks mail read <id>` | `works-cli mail read <id>` | |
+| `nworks calendar list` | `works-cli cal events --from <d> --to <d>` | |
+| `nworks bot send ...` | `works-cli bot send --bot <id> --user <u> --message <m>` | |
+
+`nworks`는 `works-cli`의 안정화 이후 deprecated 될 예정입니다. 마이그레이션 기간 동안 두 도구를 병행 사용할 수 있습니다.
+
+---
+
+## 에러 메시지 카탈로그
+
+| HTTP | 메시지 | 의미 / 대응 |
+|------|--------|------------|
+| 401 | "PAT가 만료되었거나 잘못되었습니다…" | `works-cli config set-pat`으로 재설정 |
+| 403 | "Scope 부족 또는 권한 없음" | PAT 발급 시 필요한 scope 확인 |
+| 404 | "리소스를 찾을 수 없습니다" | ID 재확인 |
+| 429 | "요청 한도를 초과했습니다…" | 잠시 후 재시도 |
+| 5xx | "서버 오류 (status N)" | 사내 운영팀 문의 |
+| (네트워크) | "네트워크 오류: …" | VPN/사내망 연결 확인 |
+
+---
+
+## 개발
+
+```bash
+git clone https://github.com/your-org/works-cli.git
+cd works-cli
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pre-commit install
+
+# 테스트
+pytest
+
+# 로컬 설치 확인
+pipx install -e . --force
+works-cli --help
+```
+
+테스트는 모두 `respx`로 httpx를 mock하므로 실제 네트워크 호출이 발생하지 않습니다. 테스트용 PAT는 항상 `"test-pat-do-not-use"` 형태의 명백한 placeholder입니다.
+
+### 디렉토리 구조
+
+```
+works-cli/
+├── src/works_cli/
+│   ├── cli.py              # 엔트리포인트
+│   ├── config.py           # PAT/userId 로드 (env → file)
+│   ├── client.py           # httpx + Bearer + 에러 매핑
+│   ├── output.py           # text/json 출력
+│   └── commands/{mail,cal,bot}.py
+├── skills/works-cli/SKILL.md
+├── tests/
+└── pyproject.toml
+```
+
+---
+
+## 기여
+
+이슈/PR 환영합니다. 다만:
+
+- 토큰 형태 문자열을 본문/예시에 포함하지 마세요 (CI에서 차단됩니다)
+- `pre-commit run --all-files`를 통과해야 합니다
+- 새 명령을 추가할 때는 `tests/`에 mock 기반 단위 테스트를 함께 추가해주세요
+
+---
+
+## 라이선스
+
+MIT — [`LICENSE`](LICENSE) 참고.
