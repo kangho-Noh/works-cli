@@ -39,8 +39,8 @@ dev = [
 works-cli = "works_cli.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/your-org/works-cli"
-Issues = "https://github.com/your-org/works-cli/issues"
+Homepage = "https://github.com/kangho-Noh/works-cli"
+Issues = "https://github.com/kangho-Noh/works-cli/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

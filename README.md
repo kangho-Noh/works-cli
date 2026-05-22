@@ -15,7 +15,7 @@
 ## TL;DR
 
 ```bash
-git clone https://github.com/your-org/works-cli.git
+git clone https://github.com/kangho-Noh/works-cli.git
 cd works-cli
 pipx install .
 works-cli config set-pat            # PAT, userId 대화형 입력
@@ -38,7 +38,7 @@ works-cli mail unread               # 동작 확인
 ### pipx (권장)
 
 ```bash
-git clone https://github.com/your-org/works-cli.git
+git clone https://github.com/kangho-Noh/works-cli.git
 cd works-cli
 pipx install .
 works-cli --version
@@ -47,7 +47,7 @@ works-cli --version
 ### pip + venv
 
 ```bash
-git clone https://github.com/your-org/works-cli.git
+git clone https://github.com/kangho-Noh/works-cli.git
 cd works-cli
 python3 -m venv .venv && source .venv/bin/activate
 pip install .
@@ -178,7 +178,7 @@ works-cli bot send --bot <botId> --user u@x.com --payload @/tmp/sticker.json
 
 ```bash
 # 1) clone & install
-git clone https://github.com/your-org/works-cli.git ~/works-cli
+git clone https://github.com/kangho-Noh/works-cli.git ~/works-cli
 cd ~/works-cli && pipx install .
 
 # 2) PAT 입력 (대화형)
@@ -253,7 +253,7 @@ cp -r skills/works-cli ~/.claude/skills/
 ## 개발
 
 ```bash
-git clone https://github.com/your-org/works-cli.git
+git clone https://github.com/kangho-Noh/works-cli.git
 cd works-cli
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
