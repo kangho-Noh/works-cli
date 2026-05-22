@@ -10,6 +10,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import click
 
@@ -19,19 +20,31 @@ from ..output import emit, resolve_output
 _DEFAULT_TZ = "Asia/Seoul"
 
 
-def _normalize_datetime(value: str, default_time: str) -> str:
-    """입력이 'YYYY-MM-DD'면 default_time을 붙여 ISO 8601로 만든다."""
+def _tz_offset(tz: str) -> str:
+    """'Asia/Seoul' → '+09:00'. 이미 '+HH:MM' / '-HH:MM' 형식이면 그대로 반환."""
+    if tz.startswith("+") or tz.startswith("-"):
+        return tz
+    try:
+        offset = datetime.now(ZoneInfo(tz)).strftime("%z")  # '+0900'
+    except Exception as e:
+        raise click.BadParameter(f"타임존을 인식할 수 없습니다: {tz}") from e
+    return f"{offset[:3]}:{offset[3:]}"
+
+
+def _normalize_datetime(value: str, default_time: str, tz: str) -> str:
+    """YYYY-MM-DD → YYYY-MM-DDTdefault_time±HH:MM. 이미 offset이 있으면 그대로."""
+    has_offset = ("+" in value[10:]) or ("-" in value[10:]) or value.endswith("Z")
     if "T" in value:
         try:
-            datetime.fromisoformat(value)
+            datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError as e:
             raise click.BadParameter(f"날짜 형식이 잘못되었습니다: {value}") from e
-        return value
+        return value if has_offset else f"{value}{_tz_offset(tz)}"
     try:
         datetime.strptime(value, "%Y-%m-%d")
     except ValueError as e:
         raise click.BadParameter(f"날짜 형식이 잘못되었습니다: {value}") from e
-    return f"{value}T{default_time}"
+    return f"{value}T{default_time}{_tz_offset(tz)}"
 
 
 @click.group()
@@ -70,9 +83,8 @@ def cal_events(
     """캘린더 일정 목록 조회."""
     out = resolve_output(ctx.obj, as_json)
     params = {
-        "fromDateTime": _normalize_datetime(from_date, "00:00:00"),
-        "untilDateTime": _normalize_datetime(to_date, "23:59:59"),
-        "timeZone": tz,
+        "fromDateTime": _normalize_datetime(from_date, "00:00:00", tz),
+        "untilDateTime": _normalize_datetime(to_date, "23:59:59", tz),
     }
     with get_client() as c:
         if calendar_id:
@@ -148,11 +160,11 @@ def cal_create(
                 {
                     "summary": summary,
                     "start": {
-                        "dateTime": _normalize_datetime(start, "00:00:00"),
+                        "dateTime": _normalize_datetime(start, "00:00:00", tz),
                         "timeZone": tz,
                     },
                     "end": {
-                        "dateTime": _normalize_datetime(end, "00:00:00"),
+                        "dateTime": _normalize_datetime(end, "00:00:00", tz),
                         "timeZone": tz,
                     },
                 }

@@ -125,9 +125,11 @@ works-cli config show
 ### Mail
 
 ```bash
-works-cli mail unread                                 # 안 읽은 메일 수
-works-cli mail folders                                # 메일함 목록
-works-cli mail list --folder INBOX --limit 10         # 메일 목록
+works-cli mail unread                                 # 안 읽은 메일 수 (모든 폴더 합산)
+works-cli mail folders                                # 메일함 목록 (각 폴더의 unreadMailCount 포함)
+works-cli mail list --folder 0 --limit 10             # 메일 목록 (folder 0 = 받은메일함)
+works-cli mail list --folder 0 --unread               # 해당 폴더의 안 읽은 메일만
+works-cli mail list --folder 0 --filter attach        # 첨부 있는 메일만 (all/mark/attach/tome)
 works-cli mail read <mailId>                          # 메일 상세
 works-cli mail send --to a@x.com --subject hi --body world
 works-cli mail send --to a@x.com --subject hi --html --body '<b>hi</b>'

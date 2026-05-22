@@ -40,9 +40,35 @@ def test_cal_events_default_calendar(runner: CliRunner) -> None:
 
     assert result.exit_code == 0, result.output
     sent = route.calls[0].request
-    assert b"fromDateTime=2026-05-22T00%3A00%3A00" in sent.url.query
-    assert b"untilDateTime=2026-05-23T23%3A59%3A59" in sent.url.query
-    assert b"timeZone=Asia%2FSeoul" in sent.url.query
+    # offset이 datetime에 inline (+09:00 → %2B09%3A00), 별도 timeZone param 없음
+    assert b"fromDateTime=2026-05-22T00%3A00%3A00%2B09%3A00" in sent.url.query
+    assert b"untilDateTime=2026-05-23T23%3A59%3A59%2B09%3A00" in sent.url.query
+    assert b"timeZone=" not in sent.url.query
+
+
+@respx.mock
+def test_cal_events_offset_already_present(runner: CliRunner) -> None:
+    route = respx.get(_url(f"/users/{FAKE_USER}/calendar/events")).respond(
+        200, json={"events": []}
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "cal",
+            "events",
+            "--from",
+            "2026-05-22T10:00:00+09:00",
+            "--to",
+            "2026-05-22T11:00:00+09:00",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    # 사용자가 offset을 명시하면 이중으로 붙이지 않음
+    sent = route.calls[0].request
+    assert b"fromDateTime=2026-05-22T10%3A00%3A00%2B09%3A00" in sent.url.query
 
 
 @respx.mock
@@ -110,7 +136,7 @@ def test_cal_create_default_payload(runner: CliRunner) -> None:
     body = json.loads(route.calls[0].request.content)
     ec = body["eventComponents"][0]
     assert ec["summary"] == "회의"
-    assert ec["start"]["dateTime"] == "2026-05-23T10:00:00"
+    assert ec["start"]["dateTime"] == "2026-05-23T10:00:00+09:00"
     assert ec["start"]["timeZone"] == "Asia/Seoul"
     assert ec["description"] == "주간"
     assert [a["email"] for a in ec["attendees"]] == ["a@x.com", "b@x.com"]

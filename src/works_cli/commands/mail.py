@@ -47,8 +47,16 @@ def mail_folders(ctx: click.Context, as_json: bool) -> None:
 
 @mail.command("list")
 @click.option("--folder", required=True, help="메일함 ID (folders 명령으로 확인)")
-@click.option("--limit", type=int, default=None, help="가져올 메일 수")
+@click.option("--limit", type=int, default=None, help="가져올 메일 수 (5~200, 기본 30)")
 @click.option("--cursor", type=str, default=None, help="페이지네이션 커서")
+@click.option("--unread", is_flag=True, help="안 읽은 메일만")
+@click.option(
+    "--filter",
+    "search_filter",
+    type=click.Choice(["all", "mark", "attach", "tome"]),
+    default=None,
+    help="검색 필터 (all/mark/attach/tome)",
+)
 @click.option("--json", "as_json", is_flag=True, help="JSON 출력")
 @click.pass_context
 @handle_errors
@@ -57,6 +65,8 @@ def mail_list(
     folder: str,
     limit: Optional[int],
     cursor: Optional[str],
+    unread: bool,
+    search_filter: Optional[str],
     as_json: bool,
 ) -> None:
     """특정 메일함의 메일 목록."""
@@ -66,9 +76,13 @@ def mail_list(
         params["count"] = limit
     if cursor:
         params["cursor"] = cursor
+    if unread:
+        params["isUnread"] = "true"
+    if search_filter:
+        params["searchFilterType"] = search_filter
     with get_client() as c:
         data = c.get(
-            f"/users/{c.user_id}/mail/mailfolders/{folder}/messages",
+            f"/users/{c.user_id}/mail/mailfolders/{folder}/children",
             params=params,
         )
     emit(data, out)
@@ -123,14 +137,14 @@ def mail_send(
     else:
         if body is None:
             raise click.UsageError("--body 또는 --payload 중 하나가 필요합니다")
-        body_payload = {
+        body_payload: dict[str, object] = {
             "subject": subject,
             "body": body,
-            "contentType": "HTML" if html else "TEXT",
-            "to": list(to),
+            "contentType": "html" if html else "text",
+            "to": ";".join(to),
         }
         if cc:
-            body_payload["cc"] = list(cc)
+            body_payload["cc"] = ";".join(cc)
     with get_client() as c:
         data = c.post(f"/users/{c.user_id}/mail", json=body_payload)
     emit(data, out)

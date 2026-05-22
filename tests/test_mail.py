@@ -42,19 +42,47 @@ def test_mail_folders(runner: CliRunner) -> None:
 
 @respx.mock
 def test_mail_list_with_params(runner: CliRunner) -> None:
-    route = respx.get(_url(f"/users/{FAKE_USER}/mail/mailfolders/INBOX/messages")).respond(
-        200, json={"messages": []}
+    route = respx.get(_url(f"/users/{FAKE_USER}/mail/mailfolders/0/children")).respond(
+        200, json={"mails": []}
     )
 
     result = runner.invoke(
         cli,
-        ["mail", "list", "--folder", "INBOX", "--limit", "10", "--cursor", "c1", "--json"],
+        ["mail", "list", "--folder", "0", "--limit", "10", "--cursor", "c1", "--json"],
     )
 
     assert result.exit_code == 0, result.output
     sent = route.calls[0].request
     assert b"count=10" in sent.url.query
     assert b"cursor=c1" in sent.url.query
+
+
+@respx.mock
+def test_mail_list_unread_flag(runner: CliRunner) -> None:
+    route = respx.get(_url(f"/users/{FAKE_USER}/mail/mailfolders/0/children")).respond(
+        200, json={"mails": []}
+    )
+
+    result = runner.invoke(
+        cli, ["mail", "list", "--folder", "0", "--unread", "--json"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert b"isUnread=true" in route.calls[0].request.url.query
+
+
+@respx.mock
+def test_mail_list_search_filter(runner: CliRunner) -> None:
+    route = respx.get(_url(f"/users/{FAKE_USER}/mail/mailfolders/0/children")).respond(
+        200, json={"mails": []}
+    )
+
+    result = runner.invoke(
+        cli, ["mail", "list", "--folder", "0", "--filter", "mark", "--json"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert b"searchFilterType=mark" in route.calls[0].request.url.query
 
 
 @respx.mock
@@ -96,9 +124,10 @@ def test_mail_send_default_payload(runner: CliRunner) -> None:
     body = json.loads(route.calls[0].request.content)
     assert body["subject"] == "hello"
     assert body["body"] == "world"
-    assert body["contentType"] == "TEXT"
-    assert body["to"] == ["a@x.com", "b@x.com"]
-    assert body["cc"] == ["c@x.com"]
+    assert body["contentType"] == "text"
+    # to/cc는 세미콜론 구분 문자열
+    assert body["to"] == "a@x.com;b@x.com"
+    assert body["cc"] == "c@x.com"
 
 
 @respx.mock
@@ -111,7 +140,7 @@ def test_mail_send_html_flag(runner: CliRunner) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    assert json.loads(route.calls[0].request.content)["contentType"] == "HTML"
+    assert json.loads(route.calls[0].request.content)["contentType"] == "html"
 
 
 @respx.mock
