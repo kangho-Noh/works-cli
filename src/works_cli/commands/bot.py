@@ -28,7 +28,7 @@ def bot() -> None:
 def bot_list(ctx: click.Context, as_json: bool) -> None:
     """Bot 목록 조회."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get("/bots")
     emit(data, out)
 
@@ -41,7 +41,7 @@ def bot_list(ctx: click.Context, as_json: bool) -> None:
 def bot_info(ctx: click.Context, bot_id: str, as_json: bool) -> None:
     """Bot 상세 정보."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(f"/bots/{bot_id}")
     emit(data, out)
 
@@ -78,7 +78,7 @@ def bot_send(
         if message is None:
             raise click.UsageError("--message 또는 --payload 중 하나가 필요합니다")
         body = _text_message_payload(message)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.post(f"/bots/{bot_id}/users/{target_user}/messages", json=body)
     emit(data, out)
 
@@ -111,6 +111,6 @@ def bot_send_channel(
         if message is None:
             raise click.UsageError("--message 또는 --payload 중 하나가 필요합니다")
         body = _text_message_payload(message)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.post(f"/bots/{bot_id}/channels/{channel_id}/messages", json=body)
     emit(data, out)

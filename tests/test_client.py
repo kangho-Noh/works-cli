@@ -13,7 +13,14 @@ from .conftest import FAKE_BASE_URL
 
 
 def _client() -> WorksClient:
-    return WorksClient(Config(pat="test-pat", user_id="u@e", base_url=FAKE_BASE_URL))
+    return WorksClient(
+        Config(
+            pat="test-pat",
+            base_url=FAKE_BASE_URL,
+            default_tz="Asia/Seoul",
+            internal_domains=(),
+        )
+    )
 
 
 @respx.mock
@@ -46,7 +53,7 @@ def test_401_maps_to_pat_error() -> None:
 
     assert exc.value.status_code == 401
     assert "PAT" in str(exc.value)
-    assert "set-pat" in str(exc.value)
+    assert "WORKS_PAT" in str(exc.value)
 
 
 @respx.mock

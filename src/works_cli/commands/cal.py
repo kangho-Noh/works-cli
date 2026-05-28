@@ -136,7 +136,7 @@ def cal() -> None:
 def cal_list(ctx: click.Context, as_json: bool) -> None:
     """개인 캘린더 목록 조회."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(f"/users/{c.user_id}/calendar-personals")
     emit(data, out)
 
@@ -172,7 +172,7 @@ def cal_events(
     from_str = _normalize_datetime(from_date, "00:00:00", tz)
     to_str = _normalize_datetime(to_date, "23:59:59", tz)
     params = {"fromDateTime": from_str, "untilDateTime": to_str}
-    with get_client() as c:
+    with get_client(ctx) as c:
         if calendar_id:
             path = f"/users/{c.user_id}/calendars/{calendar_id}/events"
         else:
@@ -199,7 +199,7 @@ def cal_show(
 ) -> None:
     """일정 상세 조회."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         if calendar_id:
             path = f"/users/{c.user_id}/calendars/{calendar_id}/events/{event_id}"
         else:
@@ -265,7 +265,7 @@ def cal_create(
             ec["description"] = description
         if attendees:
             ec["attendees"] = [{"email": a.strip()} for a in attendees.split(",") if a.strip()]
-    with get_client() as c:
+    with get_client(ctx) as c:
         if calendar_id:
             path = f"/users/{c.user_id}/calendars/{calendar_id}/events"
         else:

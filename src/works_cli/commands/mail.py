@@ -28,7 +28,7 @@ def mail() -> None:
 def mail_unread(ctx: click.Context, as_json: bool) -> None:
     """안 읽은 메일 수 조회."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(f"/users/{c.user_id}/mail/unread-count")
     emit(data, out)
 
@@ -40,7 +40,7 @@ def mail_unread(ctx: click.Context, as_json: bool) -> None:
 def mail_folders(ctx: click.Context, as_json: bool) -> None:
     """메일함 목록 조회."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(f"/users/{c.user_id}/mail/mailfolders")
     emit(data, out)
 
@@ -80,7 +80,7 @@ def mail_list(
         params["isUnread"] = "true"
     if search_filter:
         params["searchFilterType"] = search_filter
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(
             f"/users/{c.user_id}/mail/mailfolders/{folder}/children",
             params=params,
@@ -96,7 +96,7 @@ def mail_list(
 def mail_read(ctx: click.Context, mail_id: str, as_json: bool) -> None:
     """메일 상세 조회."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(f"/users/{c.user_id}/mail/{mail_id}")
     emit(data, out)
 
@@ -145,6 +145,6 @@ def mail_send(
         }
         if cc:
             body_payload["cc"] = ";".join(cc)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.post(f"/users/{c.user_id}/mail", json=body_payload)
     emit(data, out)

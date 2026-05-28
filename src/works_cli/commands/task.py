@@ -28,7 +28,7 @@ def task() -> None:
 def task_categories(ctx: click.Context, as_json: bool) -> None:
     """할일 개인 카테고리 목록 (task list 전에 categoryId 확인용)."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(f"/users/{c.user_id}/task-categories")
     emit(data, out)
 
@@ -73,7 +73,7 @@ def task_list(
         params["count"] = limit
     if cursor:
         params["cursor"] = cursor
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(f"/users/{c.user_id}/tasks", params=params)
     emit(data, out)
 
@@ -86,7 +86,7 @@ def task_list(
 def task_show(ctx: click.Context, task_id: str, as_json: bool) -> None:
     """할일 상세 조회."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(f"/tasks/{task_id}")
     emit(data, out)
 
@@ -121,7 +121,7 @@ def task_create(
             body["description"] = description
         if due:
             body["dueDateTime"] = due
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.post(f"/users/{c.user_id}/tasks", json=body)
     emit(data, out)
 
@@ -134,7 +134,7 @@ def task_create(
 def task_complete(ctx: click.Context, task_id: str, as_json: bool) -> None:
     """할일 완료 처리 (write scope)."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.post(f"/tasks/{task_id}/complete")
     emit(data if data is not None else {"ok": True, "taskId": task_id}, out)
 
@@ -147,7 +147,7 @@ def task_complete(ctx: click.Context, task_id: str, as_json: bool) -> None:
 def task_incomplete(ctx: click.Context, task_id: str, as_json: bool) -> None:
     """할일 미완료 처리 (write scope)."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.post(f"/tasks/{task_id}/incomplete")
     emit(data if data is not None else {"ok": True, "taskId": task_id}, out)
 
@@ -160,6 +160,6 @@ def task_incomplete(ctx: click.Context, task_id: str, as_json: bool) -> None:
 def task_delete(ctx: click.Context, task_id: str, as_json: bool) -> None:
     """할일 삭제 (write scope)."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.delete(f"/tasks/{task_id}")
     emit(data if data is not None else {"ok": True, "deleted": task_id}, out)

@@ -1,41 +1,74 @@
-"""cli config 명령(set-pat, show) 테스트."""
+"""cli config show / whoami / --verbose 테스트."""
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
+import respx
 from click.testing import CliRunner
 
 from works_cli.cli import cli
+
+from .conftest import FAKE_BASE_URL, FAKE_USER
+
+
+def _url(path: str) -> str:
+    return f"{FAKE_BASE_URL}{path}"
 
 
 def test_config_show(runner: CliRunner) -> None:
     result = runner.invoke(cli, ["config", "show"])
     assert result.exit_code == 0, result.output
-    assert "USER_ID" in result.output
-    assert "tester@example.com" in result.output
-    # PAT는 마스킹돼야 한다 — 원본 문자열이 그대로 나오면 안 됨
+    assert "BASE_URL" in result.output
+    # 마스킹 확인 — 원본 평문 노출 금지
     assert "test-pat-do-not-use" not in result.output
 
 
-def test_config_set_pat_prompts_and_saves(
-    runner: CliRunner, monkeypatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path))
-    # set-pat은 env가 없어도 동작해야 함
-    monkeypatch.delenv("WORKS_PAT", raising=False)
-    monkeypatch.delenv("WORKS_USER_ID", raising=False)
+def test_config_set_pat_removed(runner: CliRunner) -> None:
+    """env-var only 정책에 따라 set-pat 명령은 제거됨."""
+    result = runner.invoke(cli, ["config", "set-pat"])
+    assert result.exit_code != 0
 
-    result = runner.invoke(
-        cli,
-        ["config", "set-pat"],
-        input="new-pat\nuser@me.com\n\n",
+
+@respx.mock
+def test_whoami_success(runner: CliRunner) -> None:
+    respx.get(_url(f"/users/{FAKE_USER}")).respond(
+        200, json={"email": "me@x.com", "userName": {"lastName": "Tester"}}
     )
 
+    result = runner.invoke(cli, ["whoami", "--json"])
+
     assert result.exit_code == 0, result.output
-    cfg_path = tmp_path / ".works-cli" / "config.json"
-    assert cfg_path.exists()
-    data = json.loads(cfg_path.read_text())
-    assert data["pat"] == "new-pat"
-    assert data["user_id"] == "user@me.com"
+    assert "me@x.com" in result.output
+
+
+@respx.mock
+def test_whoami_401_exits_2(runner: CliRunner) -> None:
+    respx.get(_url(f"/users/{FAKE_USER}")).respond(401, json={"message": "bad"})
+
+    result = runner.invoke(cli, ["whoami"])
+
+    # 표준 exit code: 401 → 2 (auth)
+    assert result.exit_code == 2
+
+
+@respx.mock
+def test_whoami_429_exits_3(runner: CliRunner) -> None:
+    respx.get(_url(f"/users/{FAKE_USER}")).respond(429)
+
+    result = runner.invoke(cli, ["whoami"])
+
+    # 표준 exit code: 429 → 3 (rate-limit)
+    assert result.exit_code == 3
+
+
+@respx.mock
+def test_verbose_masks_authorization(runner: CliRunner) -> None:
+    respx.get(_url(f"/users/{FAKE_USER}")).respond(200, json={"email": "me@x.com"})
+
+    result = runner.invoke(cli, ["-v", "whoami", "--json"])
+
+    assert result.exit_code == 0, result.output
+    # PAT 평문이 stderr에 노출되면 안 됨
+    combined = (result.output or "") + (result.stderr or "")
+    assert "test-pat-do-not-use" not in combined
+    # 마스킹된 헤더는 stderr에 표시
+    assert "Bearer" in (result.stderr or "") or "Bearer" in result.output

@@ -41,7 +41,7 @@ def user_search(
         params["count"] = limit
     if cursor:
         params["cursor"] = cursor
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get("/users", params=params)
     emit(data, out)
 
@@ -54,7 +54,7 @@ def user_search(
 def user_show(ctx: click.Context, user_id: str, as_json: bool) -> None:
     """구성원 정보 조회 (userId는 이메일 형식)."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(f"/users/{user_id}")
     emit(data, out)
 
@@ -66,7 +66,7 @@ def user_show(ctx: click.Context, user_id: str, as_json: bool) -> None:
 def user_orgs(ctx: click.Context, as_json: bool) -> None:
     """조직 목록 조회."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get("/orgunits")
     emit(data, out)
 
@@ -79,7 +79,7 @@ def user_orgs(ctx: click.Context, as_json: bool) -> None:
 def user_org_show(ctx: click.Context, org_id: str, as_json: bool) -> None:
     """조직 상세 조회."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(f"/orgunits/{org_id}")
     emit(data, out)
 
@@ -105,6 +105,6 @@ def user_org_members(
         params["count"] = limit
     if cursor:
         params["cursor"] = cursor
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(f"/orgunits/{org_id}/members", params=params)
     emit(data, out)

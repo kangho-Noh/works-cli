@@ -1,82 +1,52 @@
-"""환경변수 → ~/.works-cli/config.json 순으로 PAT/userId/baseUrl 로드."""
+"""환경변수에서 PAT/base URL을 로드. 토큰 안전성을 위해 디스크 저장은 지원하지 않는다.
+
+WORKS_PAT만 필수. WORKS_BASE_URL/DEFAULT_TZ/INTERNAL_DOMAINS는 옵션.
+사용자 식별자는 NAVER Works 'me' self-alias를 사용해 별도 설정 불필요.
+"""
 
 from __future__ import annotations
 
-import json
 import os
-import stat
 from dataclasses import dataclass
-from pathlib import Path
 
 DEFAULT_BASE_URL = "https://corp.worksapis.com/v1.0"
-
-
-def _config_dir() -> Path:
-    return Path.home() / ".works-cli"
-
-
-def _config_file() -> Path:
-    return _config_dir() / "config.json"
+DEFAULT_TZ = "Asia/Seoul"
 
 
 class ConfigError(Exception):
-    """설정 누락/손상."""
+    """설정 누락/잘못됨."""
 
 
 @dataclass(frozen=True)
 class Config:
     pat: str
-    user_id: str
     base_url: str
+    default_tz: str
+    internal_domains: tuple[str, ...]
 
 
 def load_config() -> Config:
     pat = os.environ.get("WORKS_PAT") or None
-    user_id = os.environ.get("WORKS_USER_ID") or None
-    base_url = os.environ.get("WORKS_BASE_URL") or None
-
-    cfg_file = _config_file()
-    if cfg_file.exists() and (pat is None or user_id is None or base_url is None):
-        try:
-            data = json.loads(cfg_file.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as e:
-            raise ConfigError(f"설정 파일({cfg_file})이 손상되었습니다: {e}") from e
-        if pat is None:
-            pat = data.get("pat")
-        if user_id is None:
-            user_id = data.get("user_id")
-        if base_url is None:
-            base_url = data.get("base_url")
-
-    if base_url is None:
-        base_url = DEFAULT_BASE_URL
-
     if not pat:
         raise ConfigError(
-            "WORKS_PAT가 설정되지 않았습니다. `works-cli config set-pat`을 실행하거나 환경변수 WORKS_PAT를 설정하세요."
-        )
-    if not user_id:
-        raise ConfigError(
-            "WORKS_USER_ID가 설정되지 않았습니다. `works-cli config set-pat`을 실행하거나 환경변수 WORKS_USER_ID를 설정하세요."
+            "WORKS_PAT 환경변수가 설정되지 않았습니다. "
+            "PAT는 디스크에 저장하지 않습니다 — 셸에서 `export WORKS_PAT='<your-pat>'`로 주입하세요. "
+            "안전한 패턴은 README의 '토큰 설정' 섹션을 참고."
         )
 
-    return Config(pat=pat, user_id=user_id, base_url=base_url)
-
-
-def save_config(cfg: Config) -> Path:
-    cfg_dir = _config_dir()
-    cfg_dir.mkdir(parents=True, exist_ok=True)
-    cfg_file = _config_file()
-    cfg_file.write_text(
-        json.dumps(
-            {"pat": cfg.pat, "user_id": cfg.user_id, "base_url": cfg.base_url},
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
+    base_url = os.environ.get("WORKS_BASE_URL") or DEFAULT_BASE_URL
+    default_tz = os.environ.get("WORKS_DEFAULT_TZ") or DEFAULT_TZ
+    raw_domains = os.environ.get("WORKS_INTERNAL_DOMAINS") or ""
+    internal_domains = tuple(
+        d.strip().lower() for d in raw_domains.split(",") if d.strip()
     )
-    cfg_file.chmod(stat.S_IRUSR | stat.S_IWUSR)
-    return cfg_file
+
+    return Config(
+        pat=pat,
+        base_url=base_url,
+        default_tz=default_tz,
+        internal_domains=internal_domains,
+    )
 
 
 def mask_pat(pat: str) -> str:

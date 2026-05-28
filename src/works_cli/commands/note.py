@@ -44,7 +44,7 @@ def note_list(
         params["count"] = limit
     if cursor:
         params["cursor"] = cursor
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(f"/groups/{group_id}/note/posts", params=params)
     emit(data, out)
 
@@ -60,7 +60,7 @@ def note_show(
 ) -> None:
     """그룹 노트 게시글 상세."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.get(f"/groups/{group_id}/note/posts/{post_id}")
     emit(data, out)
 
@@ -93,7 +93,7 @@ def note_create(
         if body is None:
             raise click.UsageError("--body 또는 --payload 중 하나가 필요합니다")
         body_payload = {"title": title, "body": body}
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.post(f"/groups/{group_id}/note/posts", json=body_payload)
     emit(data, out)
 
@@ -109,6 +109,6 @@ def note_delete(
 ) -> None:
     """그룹 노트 게시글 삭제 (write scope)."""
     out = resolve_output(ctx.obj, as_json)
-    with get_client() as c:
+    with get_client(ctx) as c:
         data = c.delete(f"/groups/{group_id}/note/posts/{post_id}")
     emit(data if data is not None else {"ok": True, "deleted": post_id}, out)

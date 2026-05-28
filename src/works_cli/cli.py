@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import sys
+
 import click
 
 from . import __version__
-from ._cli_utils import handle_errors
-from .config import DEFAULT_BASE_URL, Config, load_config, mask_pat, save_config
+from ._cli_utils import EXIT_USAGE, get_client, handle_errors
+from .config import DEFAULT_BASE_URL, DEFAULT_TZ, ConfigError, load_config, mask_pat
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -19,36 +21,53 @@ from .config import DEFAULT_BASE_URL, Config, load_config, mask_pat, save_config
     help="출력 포맷 (기본: text)",
 )
 @click.option("--json", "as_json", is_flag=True, default=False, help="--output json 단축")
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    default=False,
+    help="HTTP 요청/응답을 stderr로 (Authorization은 마스킹)",
+)
 @click.pass_context
-def cli(ctx: click.Context, output: str, as_json: bool) -> None:
-    """NAVER WORKS API용 PAT 기반 CLI."""
+def cli(ctx: click.Context, output: str, as_json: bool, verbose: bool) -> None:
+    """NAVER WORKS API용 PAT 기반 CLI.
+
+    PAT는 WORKS_PAT 환경변수에서만 읽습니다 (디스크에 저장하지 않습니다).
+    """
     ctx.ensure_object(dict)
     ctx.obj["output"] = "json" if as_json else output
+    ctx.obj["verbose"] = verbose
 
 
 @cli.group()
 def config() -> None:
-    """PAT 및 사용자 설정."""
-
-
-@config.command("set-pat")
-def config_set_pat() -> None:
-    """PAT / USER_ID / BASE_URL 대화형 입력 및 ~/.works-cli/config.json 저장."""
-    pat = click.prompt("WORKS_PAT", hide_input=True).strip()
-    user_id = click.prompt("WORKS_USER_ID (이메일 형식)").strip()
-    base_url = click.prompt("WORKS_BASE_URL", default=DEFAULT_BASE_URL).strip()
-    path = save_config(Config(pat=pat, user_id=user_id, base_url=base_url))
-    click.echo(f"저장됨: {path} (권한 0600)")
+    """현재 설정 확인."""
 
 
 @config.command("show")
+@click.pass_context
 @handle_errors
-def config_show() -> None:
-    """현재 설정 출력 (PAT 마스킹)."""
+def config_show(ctx: click.Context) -> None:
+    """환경변수에서 로드된 설정 표시 (PAT 마스킹)."""
     cfg = load_config()
-    click.echo(f"PAT:      {mask_pat(cfg.pat)}")
-    click.echo(f"USER_ID:  {cfg.user_id}")
-    click.echo(f"BASE_URL: {cfg.base_url}")
+    click.echo(f"PAT:              {mask_pat(cfg.pat)}  (env: WORKS_PAT)")
+    click.echo(f"BASE_URL:         {cfg.base_url}")
+    click.echo(f"DEFAULT_TZ:       {cfg.default_tz}")
+    click.echo(f"INTERNAL_DOMAINS: {', '.join(cfg.internal_domains) or '(none)'}")
+
+
+@cli.command("whoami")
+@click.option("--json", "as_json", is_flag=True, default=False, help="JSON 출력")
+@click.pass_context
+@handle_errors
+def whoami(ctx: click.Context, as_json: bool) -> None:
+    """현재 PAT 보유자 정보 — 토큰 health check."""
+    from .output import emit, resolve_output
+
+    out = resolve_output(ctx.obj, as_json)
+    with get_client(ctx) as c:
+        data = c.get(f"/users/{c.user_id}")
+    emit(data, out)
 
 
 from .commands.bot import bot as _bot_group  # noqa: E402
@@ -67,7 +86,19 @@ cli.add_command(_user_group)
 
 
 def main() -> None:
-    cli(obj={})
+    try:
+        cli(obj={}, standalone_mode=False)
+    except click.exceptions.UsageError as e:
+        e.show()
+        sys.exit(EXIT_USAGE)
+    except click.exceptions.Abort:
+        click.echo("Aborted!", err=True)
+        sys.exit(1)
+    except (click.exceptions.Exit, SystemExit):
+        raise
+    except ConfigError as e:
+        click.echo(f"오류: {e}", err=True)
+        sys.exit(2)
 
 
 __all__ = ["cli", "main"]

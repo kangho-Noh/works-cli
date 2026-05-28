@@ -82,41 +82,59 @@ NAVER WORKS PAT는 사내 PAT 발급 페이지에서 발급할 수 있습니다(
 
 ---
 
-## 초기 설정
+## 토큰 설정 (env var only)
 
-세 가지 방법 중 하나를 선택합니다. **우선순위는 환경변수 > 설정파일** 입니다.
-
-### 방법 A — 대화형 설정 (가장 간단)
+`works-cli`는 PAT를 **환경변수에서만 읽습니다**. 디스크에 저장하지 않습니다.
 
 ```bash
-works-cli config set-pat
-# WORKS_PAT: ****     <- hide_input, 입력값은 화면에 표시 안 됨
-# WORKS_USER_ID (이메일 형식): user@yourdomain.com
-# WORKS_BASE_URL [https://corp.worksapis.com/v1.0]: (Enter)
+export WORKS_PAT='<your-pat>'
+works-cli whoami     # 토큰 검증 + 내 정보
 ```
 
-저장 위치: `~/.works-cli/config.json` (퍼미션 0600)
-
-### 방법 B — 환경변수
+`~/.zshrc`에 PAT를 두기 싫다면 `chmod 600`한 파일에서 셸 시작 시 로드:
 
 ```bash
-export WORKS_PAT="..."
-export WORKS_USER_ID="user@yourdomain.com"
-# (선택) export WORKS_BASE_URL="https://corp.worksapis.com/v1.0"
+chmod 600 ~/.works-pat
+export WORKS_PAT="$(cat ~/.works-pat)"
 ```
 
-### 방법 C — `.env` 파일
+> [!IMPORTANT]
+> 의도적으로 **지원하지 않는** 패턴:
+> - `--token` CLI 인자 (shell history에 누설)
+> - `.env` 파일 (git/공유로 누설)
+> - `~/.works-cli/config.yaml` 류의 dotfile 저장 (백업/sync로 누설)
+>
+> 토큰 회전은 **환경변수 한 줄 수정**으로 끝납니다.
 
-`.env.example`를 `.env`로 복사한 뒤 값을 채워 넣고, 셸에서 `source .env && export $(cut -d= -f1 .env)` 등으로 로드합니다. **`.env`는 `.gitignore`에 등록되어 있어 커밋되지 않습니다.**
+### 환경변수 전체
+
+| 변수 | 효과 | 기본값 |
+|------|------|--------|
+| `WORKS_PAT` | Personal Access Token | (필수) |
+| `WORKS_BASE_URL` | API base URL 오버라이드 | `https://corp.worksapis.com/v1.0` (사내 tenant) |
+| `WORKS_DEFAULT_TZ` | calendar / `--tz` fallback에 사용 (IANA) | `Asia/Seoul` |
+| `WORKS_INTERNAL_DOMAINS` | `mail send` 외부 수신자 분류에 internal로 추가 인정할 도메인 (콤마) | (없음 — 본인 도메인만) |
+
+> **첫 명령에서 400 BAD_REQUEST?** Base URL이 tenant와 안 맞을 가능성. `WORKS_BASE_URL`을 확인하세요.
 
 ### 설정 확인
 
 ```bash
-works-cli config show
-# PAT:      ****abcd   (마지막 4자만 표시)
-# USER_ID:  user@yourdomain.com
-# BASE_URL: https://corp.worksapis.com/v1.0
+works-cli config show          # 마스킹된 PAT + base URL + tz
+works-cli whoami               # PAT 유효성 + 본인 정보 (token healthcheck)
 ```
+
+## 보안 모델
+
+| 항목 | 동작 |
+|------|------|
+| 토큰 source | `WORKS_PAT` 환경변수 단일 출처. 디스크 저장 없음 |
+| `--verbose` / `-v` | Authorization 헤더 자동 마스킹 (`Bearer ****abcd`) |
+| 401 / 403 | 즉시 abort, 재시도 없음 (계정 잠금 방지) |
+| 429 | abort + `Retry-After` hint, 자동 재시도 없음 |
+| TLS | verify 항상 on, `--insecure` 없음 |
+| 사용자 식별자 | `me` self-alias만 사용, 타 사용자 호출 불가 (`user show <id>`는 별도 read-only 명령) |
+| Exit codes | `0` ok / `1` generic / `2` auth(401/403) / `3` rate-limit(429) / `4` confirm / `5` usage |
 
 ---
 
