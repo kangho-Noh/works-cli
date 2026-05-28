@@ -44,7 +44,7 @@ def test_bot_send_default_text(runner: CliRunner) -> None:
 
     result = runner.invoke(
         cli,
-        ["bot", "send", "--bot", "b1", "--user", "u@x.com", "--message", "안녕"],
+        ["bot", "send", "--bot", "b1", "--user", "u@x.com", "--message", "안녕", "--yes"],
     )
 
     assert result.exit_code == 0, result.output
@@ -60,7 +60,7 @@ def test_bot_send_channel(runner: CliRunner) -> None:
 
     result = runner.invoke(
         cli,
-        ["bot", "send-channel", "--bot", "b1", "--channel", "ch1", "--message", "ping"],
+        ["bot", "send-channel", "--bot", "b1", "--channel", "ch1", "--message", "ping", "--yes"],
     )
 
     assert result.exit_code == 0, result.output
@@ -85,6 +85,7 @@ def test_bot_send_payload_override(runner: CliRunner, tmp_path) -> None:
             "u@x.com",
             "--payload",
             str(p),
+            "--yes",
         ],
     )
 

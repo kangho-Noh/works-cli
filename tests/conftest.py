@@ -15,12 +15,18 @@ FAKE_BASE_URL = "https://test.example/v1.0"
 
 
 @pytest.fixture(autouse=True)
-def fake_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """모든 테스트에 가짜 env 주입."""
+def fake_env(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    """모든 테스트에 가짜 env 주입. burst guard 파일은 tmp로 격리."""
     monkeypatch.setenv("WORKS_PAT", FAKE_PAT)
     monkeypatch.setenv("WORKS_BASE_URL", FAKE_BASE_URL)
     monkeypatch.delenv("WORKS_DEFAULT_TZ", raising=False)
     monkeypatch.delenv("WORKS_INTERNAL_DOMAINS", raising=False)
+    # burst guard가 실제 ~/.works-cli/last-send를 건드리지 않도록
+    monkeypatch.setenv("WORKS_BURST_PATH", str(tmp_path / "burst-test"))
+    # _cli_utils 모듈의 _BURST_PATH 상수도 격리
+    import works_cli._cli_utils as cu
+
+    monkeypatch.setattr(cu, "_BURST_PATH", tmp_path / "burst-test")
 
 
 @pytest.fixture

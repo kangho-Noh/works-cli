@@ -47,7 +47,7 @@ def test_note_create(runner: CliRunner) -> None:
 
     result = runner.invoke(
         cli,
-        ["note", "create", "--group", "g1", "--title", "T", "--body", "B", "--json"],
+        ["note", "create", "--group", "g1", "--title", "T", "--body", "B", "--yes", "--json"],
     )
 
     assert result.exit_code == 0, result.output
@@ -67,7 +67,7 @@ def test_note_delete(runner: CliRunner) -> None:
     respx.delete(_url("/groups/g1/note/posts/p1")).respond(204)
 
     result = runner.invoke(
-        cli, ["note", "delete", "p1", "--group", "g1", "--json"]
+        cli, ["note", "delete", "p1", "--group", "g1", "--yes", "--json"]
     )
 
     assert result.exit_code == 0, result.output

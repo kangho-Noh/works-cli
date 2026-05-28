@@ -69,7 +69,7 @@ def test_task_create_default_payload(runner: CliRunner) -> None:
 
     result = runner.invoke(
         cli,
-        ["task", "create", "--title", "T", "--description", "D", "--due", "2026-05-23T18:00:00+09:00", "--json"],
+        ["task", "create", "--title", "T", "--description", "D", "--due", "2026-05-23T18:00:00+09:00", "--yes", "--json"],
     )
 
     assert result.exit_code == 0, result.output
@@ -78,10 +78,21 @@ def test_task_create_default_payload(runner: CliRunner) -> None:
 
 
 @respx.mock
+def test_task_create_dry_run_without_yes(runner: CliRunner) -> None:
+    """--yes 없으면 호출하지 않고 exit 4."""
+    route = respx.post(_url(f"/users/{FAKE_USER}/tasks")).respond(200, json={"taskId": "new"})
+
+    result = runner.invoke(cli, ["task", "create", "--title", "T"])
+
+    assert result.exit_code == 4
+    assert not route.called
+
+
+@respx.mock
 def test_task_complete(runner: CliRunner) -> None:
     respx.post(_url("/tasks/t1/complete")).respond(204)
 
-    result = runner.invoke(cli, ["task", "complete", "t1", "--json"])
+    result = runner.invoke(cli, ["task", "complete", "t1", "--yes", "--json"])
 
     assert result.exit_code == 0, result.output
     assert json.loads(result.output) == {"ok": True, "taskId": "t1"}
@@ -91,7 +102,7 @@ def test_task_complete(runner: CliRunner) -> None:
 def test_task_incomplete(runner: CliRunner) -> None:
     respx.post(_url("/tasks/t1/incomplete")).respond(204)
 
-    result = runner.invoke(cli, ["task", "incomplete", "t1", "--json"])
+    result = runner.invoke(cli, ["task", "incomplete", "t1", "--yes", "--json"])
 
     assert result.exit_code == 0, result.output
 
@@ -100,7 +111,7 @@ def test_task_incomplete(runner: CliRunner) -> None:
 def test_task_delete(runner: CliRunner) -> None:
     respx.delete(_url("/tasks/t1")).respond(204)
 
-    result = runner.invoke(cli, ["task", "delete", "t1", "--json"])
+    result = runner.invoke(cli, ["task", "delete", "t1", "--yes", "--json"])
 
     assert result.exit_code == 0, result.output
     assert json.loads(result.output) == {"ok": True, "deleted": "t1"}

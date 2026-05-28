@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 import click
 from dateutil.rrule import rrulestr
 
-from .._cli_utils import get_client, handle_errors
+from .._cli_utils import get_client, handle_errors, require_yes
 from ..output import emit, resolve_output
 
 _DEFAULT_TZ = "Asia/Seoul"
@@ -221,6 +221,7 @@ def cal_show(
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="JSON payload 파일 (이 옵션 사용 시 다른 옵션은 무시)",
 )
+@click.option("--yes", is_flag=True, help="실제 호출 (생략 시 dry-run + exit 4)")
 @click.option("--json", "as_json", is_flag=True, help="JSON 출력")
 @click.pass_context
 @handle_errors
@@ -234,6 +235,7 @@ def cal_create(
     calendar_id: Optional[str],
     tz: str,
     payload: Optional[Path],
+    yes: bool,
     as_json: bool,
 ) -> None:
     """일정 생성 (write scope 필요).
@@ -270,5 +272,6 @@ def cal_create(
             path = f"/users/{c.user_id}/calendars/{calendar_id}/events"
         else:
             path = f"/users/{c.user_id}/calendar/events"
+        require_yes(yes, "POST", path, payload=body)
         data = c.post(path, json=body)
     emit(data, out)

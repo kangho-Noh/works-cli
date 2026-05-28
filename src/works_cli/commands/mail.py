@@ -12,7 +12,15 @@ from typing import Optional
 
 import click
 
-from .._cli_utils import get_client, handle_errors
+from .._cli_utils import (
+    burst_check_and_mark,
+    classify_external,
+    get_client,
+    handle_errors,
+    hash_payload,
+    redact_if_no_pii,
+    require_yes,
+)
 from ..output import emit, resolve_output
 
 
@@ -90,14 +98,19 @@ def mail_list(
 
 @mail.command("read")
 @click.argument("mail_id")
+@click.option("--show-pii", is_flag=True, help="본문(body)을 redact하지 않고 그대로 노출")
 @click.option("--json", "as_json", is_flag=True, help="JSON 출력")
 @click.pass_context
 @handle_errors
-def mail_read(ctx: click.Context, mail_id: str, as_json: bool) -> None:
-    """메일 상세 조회."""
+def mail_read(ctx: click.Context, mail_id: str, show_pii: bool, as_json: bool) -> None:
+    """메일 상세 조회. 기본은 본문을 redact, --show-pii로 노출."""
     out = resolve_output(ctx.obj, as_json)
     with get_client(ctx) as c:
         data = c.get(f"/users/{c.user_id}/mail/{mail_id}")
+    if isinstance(data, dict):
+        m = data.get("mail")
+        if isinstance(m, dict) and "body" in m:
+            m["body"] = redact_if_no_pii(m.get("body"), show_pii, hint="메일 본문")
     emit(data, out)
 
 
@@ -112,6 +125,12 @@ def mail_read(ctx: click.Context, mail_id: str, as_json: bool) -> None:
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="JSON payload 파일 (이 옵션 사용 시 다른 옵션은 무시되고 raw payload 그대로 전송)",
 )
+@click.option("--yes", is_flag=True, help="실제 발송 (생략 시 dry-run + exit 4)")
+@click.option(
+    "--allow-external",
+    is_flag=True,
+    help="본인/INTERNAL_DOMAINS 외 수신자가 있어도 발송 (외부 게이트)",
+)
 @click.option("--json", "as_json", is_flag=True, help="JSON 출력")
 @click.pass_context
 @handle_errors
@@ -123,17 +142,18 @@ def mail_send(
     body: Optional[str],
     html: bool,
     payload: Optional[Path],
+    yes: bool,
+    allow_external: bool,
     as_json: bool,
 ) -> None:
-    """메일 발송 (write scope 필요).
-
-    실제 API 페이로드 스키마는 사내 NAVER WORKS API 문서를 참조하세요. 기본
-    스키마가 맞지 않으면 `--payload @file.json`으로 raw payload를 직접 전달할
-    수 있습니다.
-    """
+    """메일 발송 (write scope, 기본 dry-run, 외부 수신자/burst 추가 게이트)."""
     out = resolve_output(ctx.obj, as_json)
     if payload is not None:
         body_payload = json.loads(payload.read_text(encoding="utf-8"))
+        all_to = body_payload.get("to", "")
+        all_cc = body_payload.get("cc", "")
+        to_emails = [e.strip() for e in str(all_to).split(";") if e.strip()] if all_to else []
+        cc_emails = [e.strip() for e in str(all_cc).split(";") if e.strip()] if all_cc else []
     else:
         if body is None:
             raise click.UsageError("--body 또는 --payload 중 하나가 필요합니다")
@@ -145,6 +165,29 @@ def mail_send(
         }
         if cc:
             body_payload["cc"] = ";".join(cc)
+        to_emails = list(to)
+        cc_emails = list(cc)
+
     with get_client(ctx) as c:
+        # 본인 도메인은 whoami로 1회 확보 (env-var only이므로 캐시 안 함)
+        if not allow_external and (to_emails or cc_emails):
+            me = c.get(f"/users/{c.user_id}")
+            sender_email = me.get("email", "") if isinstance(me, dict) else ""
+            sender_domain = sender_email.split("@", 1)[1].lower() if "@" in sender_email else ""
+            externals = classify_external(
+                sender_domain=sender_domain,
+                internal_domains=c.config.internal_domains,
+                recipients=to_emails + cc_emails,
+            )
+            if externals:
+                click.echo(
+                    f"오류: 외부 도메인 수신자 {len(externals)}명 발견 → {', '.join(externals)}. "
+                    "외부 발송을 의도했다면 --allow-external을 추가하세요.",
+                    err=True,
+                )
+                ctx.exit(4)
+
+        require_yes(yes, "POST", f"/users/{c.user_id}/mail", payload=body_payload)
+        burst_check_and_mark(hash_payload(body_payload))
         data = c.post(f"/users/{c.user_id}/mail", json=body_payload)
     emit(data, out)

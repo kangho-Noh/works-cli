@@ -12,7 +12,7 @@ from typing import Optional
 
 import click
 
-from .._cli_utils import get_client, handle_errors
+from .._cli_utils import get_client, handle_errors, require_yes
 from ..output import emit, resolve_output
 
 
@@ -100,6 +100,7 @@ def task_show(ctx: click.Context, task_id: str, as_json: bool) -> None:
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="JSON payload 파일 (이 옵션 사용 시 다른 옵션 무시)",
 )
+@click.option("--yes", is_flag=True, help="실제 호출 (생략 시 dry-run + exit 4)")
 @click.option("--json", "as_json", is_flag=True, help="JSON 출력")
 @click.pass_context
 @handle_errors
@@ -109,9 +110,10 @@ def task_create(
     description: Optional[str],
     due: Optional[str],
     payload: Optional[Path],
+    yes: bool,
     as_json: bool,
 ) -> None:
-    """할일 생성 (write scope 필요)."""
+    """할일 생성 (write scope, 기본 dry-run)."""
     out = resolve_output(ctx.obj, as_json)
     if payload is not None:
         body = json.loads(payload.read_text(encoding="utf-8"))
@@ -122,44 +124,55 @@ def task_create(
         if due:
             body["dueDateTime"] = due
     with get_client(ctx) as c:
-        data = c.post(f"/users/{c.user_id}/tasks", json=body)
+        path = f"/users/{c.user_id}/tasks"
+        require_yes(yes, "POST", path, payload=body)
+        data = c.post(path, json=body)
     emit(data, out)
 
 
 @task.command("complete")
 @click.argument("task_id")
+@click.option("--yes", is_flag=True, help="실제 호출 (생략 시 dry-run + exit 4)")
 @click.option("--json", "as_json", is_flag=True, help="JSON 출력")
 @click.pass_context
 @handle_errors
-def task_complete(ctx: click.Context, task_id: str, as_json: bool) -> None:
-    """할일 완료 처리 (write scope)."""
+def task_complete(ctx: click.Context, task_id: str, yes: bool, as_json: bool) -> None:
+    """할일 완료 처리 (write scope, 기본 dry-run)."""
     out = resolve_output(ctx.obj, as_json)
+    path = f"/tasks/{task_id}/complete"
+    require_yes(yes, "POST", path)
     with get_client(ctx) as c:
-        data = c.post(f"/tasks/{task_id}/complete")
+        data = c.post(path)
     emit(data if data is not None else {"ok": True, "taskId": task_id}, out)
 
 
 @task.command("incomplete")
 @click.argument("task_id")
+@click.option("--yes", is_flag=True, help="실제 호출 (생략 시 dry-run + exit 4)")
 @click.option("--json", "as_json", is_flag=True, help="JSON 출력")
 @click.pass_context
 @handle_errors
-def task_incomplete(ctx: click.Context, task_id: str, as_json: bool) -> None:
-    """할일 미완료 처리 (write scope)."""
+def task_incomplete(ctx: click.Context, task_id: str, yes: bool, as_json: bool) -> None:
+    """할일 미완료 처리 (write scope, 기본 dry-run)."""
     out = resolve_output(ctx.obj, as_json)
+    path = f"/tasks/{task_id}/incomplete"
+    require_yes(yes, "POST", path)
     with get_client(ctx) as c:
-        data = c.post(f"/tasks/{task_id}/incomplete")
+        data = c.post(path)
     emit(data if data is not None else {"ok": True, "taskId": task_id}, out)
 
 
 @task.command("delete")
 @click.argument("task_id")
+@click.option("--yes", is_flag=True, help="실제 호출 (생략 시 dry-run + exit 4)")
 @click.option("--json", "as_json", is_flag=True, help="JSON 출력")
 @click.pass_context
 @handle_errors
-def task_delete(ctx: click.Context, task_id: str, as_json: bool) -> None:
-    """할일 삭제 (write scope)."""
+def task_delete(ctx: click.Context, task_id: str, yes: bool, as_json: bool) -> None:
+    """할일 삭제 (write scope, 기본 dry-run)."""
     out = resolve_output(ctx.obj, as_json)
+    path = f"/tasks/{task_id}"
+    require_yes(yes, "DELETE", path)
     with get_client(ctx) as c:
-        data = c.delete(f"/tasks/{task_id}")
+        data = c.delete(path)
     emit(data if data is not None else {"ok": True, "deleted": task_id}, out)

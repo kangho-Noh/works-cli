@@ -14,7 +14,7 @@ from typing import Optional
 
 import click
 
-from .._cli_utils import get_client, handle_errors
+from .._cli_utils import get_client, handle_errors, require_yes
 from ..output import emit, resolve_output
 
 
@@ -74,6 +74,7 @@ def note_show(
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="JSON payload 파일",
 )
+@click.option("--yes", is_flag=True, help="실제 호출 (생략 시 dry-run + exit 4)")
 @click.option("--json", "as_json", is_flag=True, help="JSON 출력")
 @click.pass_context
 @handle_errors
@@ -83,9 +84,10 @@ def note_create(
     title: str,
     body: Optional[str],
     payload: Optional[Path],
+    yes: bool,
     as_json: bool,
 ) -> None:
-    """그룹 노트 게시글 작성 (write scope 필요)."""
+    """그룹 노트 게시글 작성 (write scope, 기본 dry-run)."""
     out = resolve_output(ctx.obj, as_json)
     if payload is not None:
         body_payload = json.loads(payload.read_text(encoding="utf-8"))
@@ -93,22 +95,27 @@ def note_create(
         if body is None:
             raise click.UsageError("--body 또는 --payload 중 하나가 필요합니다")
         body_payload = {"title": title, "body": body}
+    path = f"/groups/{group_id}/note/posts"
+    require_yes(yes, "POST", path, payload=body_payload)
     with get_client(ctx) as c:
-        data = c.post(f"/groups/{group_id}/note/posts", json=body_payload)
+        data = c.post(path, json=body_payload)
     emit(data, out)
 
 
 @note.command("delete")
 @click.argument("post_id")
 @click.option("--group", "group_id", required=True, help="그룹/조직 ID")
+@click.option("--yes", is_flag=True, help="실제 호출 (생략 시 dry-run + exit 4)")
 @click.option("--json", "as_json", is_flag=True, help="JSON 출력")
 @click.pass_context
 @handle_errors
 def note_delete(
-    ctx: click.Context, post_id: str, group_id: str, as_json: bool
+    ctx: click.Context, post_id: str, group_id: str, yes: bool, as_json: bool
 ) -> None:
-    """그룹 노트 게시글 삭제 (write scope)."""
+    """그룹 노트 게시글 삭제 (write scope, 기본 dry-run)."""
     out = resolve_output(ctx.obj, as_json)
+    path = f"/groups/{group_id}/note/posts/{post_id}"
+    require_yes(yes, "DELETE", path)
     with get_client(ctx) as c:
-        data = c.delete(f"/groups/{group_id}/note/posts/{post_id}")
+        data = c.delete(path)
     emit(data if data is not None else {"ok": True, "deleted": post_id}, out)

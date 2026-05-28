@@ -12,7 +12,7 @@ from typing import Optional
 
 import click
 
-from .._cli_utils import get_client, handle_errors
+from .._cli_utils import get_client, handle_errors, require_yes
 from ..output import emit, resolve_output
 
 
@@ -59,6 +59,7 @@ def _text_message_payload(message: str) -> dict:
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="JSON payload 파일 (이 옵션 사용 시 --message 무시)",
 )
+@click.option("--yes", is_flag=True, help="실제 호출 (생략 시 dry-run + exit 4)")
 @click.option("--json", "as_json", is_flag=True, help="JSON 출력")
 @click.pass_context
 @handle_errors
@@ -68,9 +69,10 @@ def bot_send(
     target_user: str,
     message: Optional[str],
     payload: Optional[Path],
+    yes: bool,
     as_json: bool,
 ) -> None:
-    """특정 사용자에게 Bot 메시지 전송 (write scope 필요)."""
+    """특정 사용자에게 Bot 메시지 전송 (write scope, 기본 dry-run)."""
     out = resolve_output(ctx.obj, as_json)
     if payload is not None:
         body = json.loads(payload.read_text(encoding="utf-8"))
@@ -78,8 +80,10 @@ def bot_send(
         if message is None:
             raise click.UsageError("--message 또는 --payload 중 하나가 필요합니다")
         body = _text_message_payload(message)
+    path = f"/bots/{bot_id}/users/{target_user}/messages"
+    require_yes(yes, "POST", path, payload=body)
     with get_client(ctx) as c:
-        data = c.post(f"/bots/{bot_id}/users/{target_user}/messages", json=body)
+        data = c.post(path, json=body)
     emit(data, out)
 
 
@@ -92,6 +96,7 @@ def bot_send(
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="JSON payload 파일",
 )
+@click.option("--yes", is_flag=True, help="실제 호출 (생략 시 dry-run + exit 4)")
 @click.option("--json", "as_json", is_flag=True, help="JSON 출력")
 @click.pass_context
 @handle_errors
@@ -101,9 +106,10 @@ def bot_send_channel(
     channel_id: str,
     message: Optional[str],
     payload: Optional[Path],
+    yes: bool,
     as_json: bool,
 ) -> None:
-    """채널에 Bot 메시지 전송 (write scope 필요)."""
+    """채널에 Bot 메시지 전송 (write scope, 기본 dry-run)."""
     out = resolve_output(ctx.obj, as_json)
     if payload is not None:
         body = json.loads(payload.read_text(encoding="utf-8"))
@@ -111,6 +117,8 @@ def bot_send_channel(
         if message is None:
             raise click.UsageError("--message 또는 --payload 중 하나가 필요합니다")
         body = _text_message_payload(message)
+    path = f"/bots/{bot_id}/channels/{channel_id}/messages"
+    require_yes(yes, "POST", path, payload=body)
     with get_client(ctx) as c:
-        data = c.post(f"/bots/{bot_id}/channels/{channel_id}/messages", json=body)
+        data = c.post(path, json=body)
     emit(data, out)

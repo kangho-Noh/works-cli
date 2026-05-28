@@ -128,6 +128,7 @@ def test_cal_create_default_payload(runner: CliRunner) -> None:
             "주간",
             "--attendees",
             "a@x.com,b@x.com",
+            "--yes",
             "--json",
         ],
     )
@@ -163,6 +164,7 @@ def test_cal_create_payload_override(runner: CliRunner, tmp_path) -> None:
             "2026-05-23T11:00:00",
             "--payload",
             str(payload_file),
+            "--yes",
         ],
     )
 
